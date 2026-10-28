@@ -1,0 +1,125 @@
+name: pos-dream
+
+services:
+  # Backend connects to this service at database:5432 on pos_network.
+  database:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pos}
+      POSTGRES_USER: ${POSTGRES_USER:-pos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - pos_network
+
+  pgadmin:
+    image: dpage/pgadmin4:9.18
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-change-me-pgadmin}
+    ports:
+      - "127.0.0.1:${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/venv/bin/python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1/misc/ping', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - pos_network
+
+  # Applies pending migrations once, then exits; backend waits for it to succeed.
+  # Seed demo data with: docker compose run --rm migrate npm run seed
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["npm", "run", "migrate"]
+    restart: "no"
+    environment:
+      PGHOST: database
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-pos}
+      PGUSER: ${POSTGRES_USER:-pos}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      SEED_OWNER_PIN: ${SEED_OWNER_PIN:-}
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - pos_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-4000}
+      PGHOST: database
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-pos}
+      PGUSER: ${POSTGRES_USER:-pos}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      JWT_SECRET: ${JWT_SECRET:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+    ports:
+      - "${BACKEND_PORT:-${PORT:-4000}}:${PORT:-4000}"
+    depends_on:
+      database:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:'+process.env.PORT+'/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - pos_network
+
+  frontend:
+    build:
+      context: ./POS_dream
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE:-http://localhost:${BACKEND_PORT:-${PORT:-4000}}}
+      NUXT_PUBLIC_SOCKET_URL: ${NUXT_PUBLIC_SOCKET_URL:-http://localhost:${BACKEND_PORT:-${PORT:-4000}}}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - pos_network
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+
+networks:
+  pos_network:
+    driver: bridge
