@@ -1,0 +1,6 @@
+# Local development: run PostgreSQL (and pgAdmin) in Docker, the API and web app on the host.
+#   docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d database pgadmin migrate
+services:
+  database:
+    ports:
+      - "127.0.0.1:${DEV_DB_PORT:-5432}:5432"

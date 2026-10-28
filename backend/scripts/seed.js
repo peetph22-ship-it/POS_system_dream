@@ -1,12 +1,8 @@
 // Seeds an owner account and a small demo menu/floor plan for development.
 // Safe to re-run: each part is skipped when data already exists.
 const crypto = require('node:crypto')
-const path = require('node:path')
 
 const bcrypt = require('bcrypt')
-const dotenv = require('dotenv')
-
-dotenv.config({ path: path.resolve(__dirname, '../.env'), quiet: true })
 
 const pool = require('../app/config/db')
 

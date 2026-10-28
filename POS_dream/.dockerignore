@@ -7,6 +7,5 @@ node_modules
 .gitignore
 .env
 .env.*
-!.env.example
 npm-debug.log*
 Dockerfile*

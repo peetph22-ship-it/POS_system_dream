@@ -1,5 +1,8 @@
 const { Pool } = require('pg')
 
+// Loads backend/.env before PG* variables are read.
+require('./env')
+
 // Containers on pos_network reach PostgreSQL using its Compose service name.
 // DATABASE_URL can override this configuration for an external database.
 const config = process.env.DATABASE_URL

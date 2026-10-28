@@ -12,6 +12,62 @@ docker compose up -d --build
 - API health: http://localhost:4000/health
 - PostgreSQL browser administration (pgAdmin): http://localhost:5050
 
+## Local development (hot reload)
+
+Run PostgreSQL in Docker and the API and web app on your machine. Stop the
+Docker `backend` and `frontend` containers first if they hold ports 4000/3000.
+
+```sh
+docker compose stop backend frontend
+docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d database pgadmin migrate
+
+cd backend && npm install && npm run dev        # http://localhost:4000
+cd POS_dream && npm install && npm run dev      # http://localhost:3000
+```
+
+The dev override publishes PostgreSQL on `127.0.0.1:5432` (`DEV_DB_PORT` to change).
+
+`backend/.env` needs `PGHOST=localhost`, `PGPORT`, `PGDATABASE`, `PGUSER`,
+`PGPASSWORD` and `JWT_SECRET`; `PORT`, `NODE_ENV` and `CORS_ORIGIN` are optional.
+The web app defaults to `http://localhost:4000`; set `NUXT_PUBLIC_API_BASE` and
+`NUXT_PUBLIC_SOCKET_URL` in `POS_dream/.env` to point elsewhere.
+
+| Command | Where | Does |
+| --- | --- | --- |
+| `npm run dev` | backend | API with nodemon reload |
+| `npm test` | backend | `node --test` suites in `tests/` |
+| `npm run dev` | POS_dream | Nuxt dev server with HMR |
+| `npm run typecheck` | POS_dream | vue-tsc over the Nuxt app |
+
+## Project structure
+
+```
+backend/
+  index.js                 HTTP server, Socket.IO, graceful shutdown
+  app/app.js               Express app: middleware, routes, error handling
+  app/config/env.js        Environment variables validated with zod
+  app/config/db.js         PostgreSQL pool
+  app/routes/index.js      Mounts feature modules under /api/v1
+  app/modules/<feature>/   One folder per feature (routes, service, schemas)
+  app/middlewares/         validate (zod), not-found, error-handler
+  app/socket/index.js      Socket.IO setup; getIO() to emit from services
+  app/utils/http-error.js  throw HttpError.notFound() etc. from handlers
+  migrations/              SQL migrations (node-pg-migrate)
+  tests/                   node:test suites
+
+POS_dream/ (Nuxt 4, client-side rendered)
+  app/pages/               Routes: /, /login, /pos, /tables, /kitchen, /settings
+  app/layouts/             default (navigation rail) and blank (login, kitchen display)
+  app/components/          Auto-imported Vue components
+  app/composables/         useApi() for the API, useSocket() for realtime
+  app/stores/              Pinia stores
+  app/utils/               money (decimal.js, THB format), api-error, navigation
+  app/plugins/             dayjs with Thai locale and Buddhist-era years
+```
+
+To add an API feature, create `backend/app/modules/<feature>/<feature>.routes.js`
+and mount it in `backend/app/routes/index.js`.
+
 ## Database migrations
 
 The `migrate` service applies pending migrations from `backend/migrations`
